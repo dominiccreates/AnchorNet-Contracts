@@ -3087,6 +3087,35 @@ fn test_list_settlements_by_status_respects_limit() {
     assert_eq!(limited.len(), 2);
 }
 
+    #[test]
+    fn test_list_settlements_opened_since_filters_by_ledger() {
+        let env = Env::default();
+        let (client, _admin, anchor, asset) = funded(&env, 1_000);
+        // First settlement at ledger 5
+        env.ledger().set_sequence_number(5);
+        let id1 = client.open_settlement(&anchor, &asset, 100);
+        // Second settlement at ledger 10
+        env.ledger().set_sequence_number(10);
+        let id2 = client.open_settlement(&anchor, &asset, 200);
+        // Query for settlements opened at or after ledger 8
+        let results = client.list_settlements_opened_since(8, 1, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results.get(0).unwrap().id, id2);
+    }
+
+    #[test]
+    fn test_list_settlements_opened_since_pagination() {
+        let env = Env::default();
+        let (client, _admin, anchor, asset) = funded(&env, 1_000);
+        // Open three settlements at increasing ledgers
+        for (seq, amt) in [(5u32, 100), (6, 200), (7, 300)].iter() {
+            env.ledger().set_sequence_number(*seq);
+            client.open_settlement(&anchor, &asset, *amt);
+        }
+        // Query with limit 2
+        let limited = client.list_settlements_opened_since(5, 1, 2);
+        assert_eq!(limited.len(), 2);
+    }
 #[test]
 fn test_cancel_expired_settlement_rejects_double_reclaim() {
     let env = Env::default();

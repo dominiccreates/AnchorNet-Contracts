@@ -67,8 +67,13 @@ impl AnchornetContract {
 
     /// Transfers administration to `new_admin`. Requires authorization from the
     /// current administrator.
+    /// Returns `Error::InvalidAdminCandidate` if `new_admin` is the same as the current administrator.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
         Self::require_admin(&env)?;
+        // Reject no-op admin reassignment to avoid emitting misleading events.
+        if new_admin == storage::get_admin(&env) {
+            return Err(Error::InvalidAdminCandidate);
+        }
         storage::set_admin(&env, &new_admin);
         events::admin_changed(&env, &new_admin, false);
         Ok(())
