@@ -67,8 +67,13 @@ impl AnchornetContract {
 
     /// Transfers administration to `new_admin`. Requires authorization from the
     /// current administrator.
+    /// Returns `Error::InvalidAdminCandidate` if `new_admin` is the same as the current administrator.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
         Self::require_admin(&env)?;
+        // Reject no-op admin reassignment to avoid emitting misleading events.
+        if new_admin == storage::get_admin(&env) {
+            return Err(Error::InvalidAdminCandidate);
+        }
         storage::set_admin(&env, &new_admin);
         events::admin_changed(&env, &new_admin, false);
         Ok(())
@@ -1091,6 +1096,30 @@ impl AnchornetContract {
         while id <= count && (out.len() as u32) < limit {
             if let Some(settlement) = storage::get_settlement(&env, id) {
                 if settlement.status == status {
+                    out.push_back(settlement);
+                }
+            }
+            id += 1;
+        }
+        out
+    }
+
+    /// Returns settlements opened at or after the given ledger sequence.
+    /// Scans settlement IDs starting at `start` (inclusive) and returns up to `limit`
+    /// settlements whose `opened_at` >= `ledger`. IDs are assigned sequentially;
+    /// missing or non‑matching IDs are skipped without counting toward `limit`.
+    pub fn list_settlements_opened_since(
+        env: Env,
+        ledger: u32,
+        start: u64,
+        limit: u32,
+    ) -> Vec<Settlement> {
+        let mut out = Vec::new(&env);
+        let count = storage::get_settlement_count(&env);
+        let mut id = if start == 0 { 1 } else { start };
+        while id <= count && (out.len() as u32) < limit {
+            if let Some(settlement) = storage::get_settlement(&env, id) {
+                if settlement.opened_at >= ledger {
                     out.push_back(settlement);
                 }
             }
